@@ -1,6 +1,6 @@
 ##### - configuration - #####
-PROXY=https://devnet-gateway.elrond.com
-CHAIN_ID="D"
+PROXY=https://testnet-gateway.elrond.com
+CHAIN_ID="T"
 
 WALLET="./wallets/wallet.pem"
 
