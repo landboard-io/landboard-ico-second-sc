@@ -12,13 +12,6 @@ pub enum Status {
 }
 
 const EGLD_IN_WEI: u64 = 1_000_000_000_000_000_000u64;
-
-const TOTAL_PERCENTAGE: u32 = 100;
-const INITIAL_RELEASE_PERCENTAGE: u32 = 20;
-const INITIAL_LOCKED_PERCENTAGE: u32 = 80;
-const PERCENTAGE_PER_RELEASE: u32 = 10;
-const TOTAL_RELEASE_COUNT: u32 = 8;
-
 const ONE_DAY_IN_TIMESTAMPS: u64 = 24 * 3600;
 
 /// Manage ICO of a new ESDT
@@ -109,17 +102,6 @@ pub trait LandboardIcoSecond {
         self.max_buy_limit().set(&max_buy_limit);
     }
 
-    #[only_owner]
-    #[endpoint(setReleaseTimestamps)]
-    fn set_release_timestamps(&self, #[var_args] release_timestamps: MultiValueEncoded<u64>) {
-        require!(release_timestamps.len() == TOTAL_RELEASE_COUNT as usize, "number of release_timestamps should be equal to 8");
-
-        self.release_timestamps().clear();
-        for v in release_timestamps.into_iter() {
-            self.release_timestamps().push(&v);
-        }
-    }
-
     //
 
     #[only_owner]
@@ -152,7 +134,7 @@ pub trait LandboardIcoSecond {
 
         // only whitelist members can buy tokens on the first day
         if self.blockchain().get_block_timestamp() < self.start_time().get() + ONE_DAY_IN_TIMESTAMPS {
-            require!(self.whilelist().contains(&caller), "only whitelist members can buy tokens on the first day");
+            require!(self.whilelist().contains(&caller), "only whitelist members can buy tokens on the first day of sale");
         }
         
         require!(payment_amount >= self.min_buy_limit().get(), "cannot buy less than min_buy_limit at once");
@@ -162,61 +144,18 @@ pub trait LandboardIcoSecond {
 
         require!(&buy_amount + &self.total_bought_amount_of_egld().get() <= self.goal().get(), "cannot buy more than goal amount");
 
-        let mut balances = self.balances();
-        require!(!balances.contains_key(&caller), "cannot buy tokens more than 1 time");
-
-        // send 20% tokens to caller and lock 80% in SC
-        let initial_release_amount = &buy_amount * &BigUint::from(INITIAL_RELEASE_PERCENTAGE) / &BigUint::from(TOTAL_PERCENTAGE);
-        let initial_locked_amount = &buy_amount - &initial_release_amount;
-
-        require!(initial_release_amount <= self.blockchain().get_sc_balance(&self.token_id().get(), 0), "not enough tokens in smart contract");
-
-        balances.insert(caller.clone(), (initial_locked_amount, 0));
+        require!(buy_amount <= self.blockchain().get_sc_balance(&self.token_id().get(), 0), "not enough tokens in smart contract");
 
         self.total_bought_amount_of_egld().update(|v| *v += &payment_amount);
         self.total_bought_amount_of_esdt().update(|v| *v += &buy_amount);
 
-        self.send().direct(&caller, &self.token_id().get(), 0, &initial_release_amount, &[]);
+        self.send().direct(&caller, &self.token_id().get(), 0, &buy_amount, &[]);
     }
-
-    #[endpoint(claim)]
-    fn claim(&self) {
-        let caller = self.blockchain().get_caller();
-        let mut balances = self.balances();
-
-        require!(balances.contains_key(&caller), "non-registered account");
-
-        let current_timestamp = self.blockchain().get_block_timestamp();
-
-        let mut claimable_release_count = 0u32;
-
-        let release_timestamps = self.release_timestamps();
-        for i in 1..release_timestamps.len() + 1 {
-            if current_timestamp >= release_timestamps.get(i) {
-                claimable_release_count += 1;
-            }
-        }
-
-        let (initial_locked_amount, claimed_release_count) = balances.get(&caller).unwrap();
-
-        claimable_release_count -= &claimed_release_count;
-
-        require!(claimable_release_count > 0, "nothing to claim");
-        require!(claimable_release_count + claimed_release_count <= TOTAL_RELEASE_COUNT, "cannot claim more than 8 releases");
-
-        let claim_amount = BigUint::from(claimable_release_count) * &initial_locked_amount * &BigUint::from(PERCENTAGE_PER_RELEASE) / &BigUint::from(INITIAL_LOCKED_PERCENTAGE);
-
-        require!(claim_amount <= self.blockchain().get_sc_balance(&self.token_id().get(), 0), "not enough tokens in smart contract");
-
-        balances.insert(caller.clone(), (initial_locked_amount, claimed_release_count + claimable_release_count));
-
-        self.send().direct(&caller, &self.token_id().get(), 0, &claim_amount, &[]);
-    }
-
 
     /// view ///
 
     // return status of ico and left time from start_time or end_time
+    // return goal and total_bought_amount_of_esdt
     #[view(getStatus)]
     fn get_status(&self) -> (Status, u64, BigUint, BigUint) {
         let current_timestamp = self.blockchain().get_block_timestamp();
@@ -230,38 +169,6 @@ pub trait LandboardIcoSecond {
         };
 
         (status, target_time, self.goal().get(), self.total_bought_amount_of_esdt().get())
-    }
-
-    // return bought_amount, locked_amount, claimed_release_count, claimable_release_count
-    // return is_in_whitelist
-    #[view(getAccountState)]
-    fn get_account_state(&self, caller: ManagedAddress) -> (BigUint, BigUint, u32, u32, bool) {
-        let balances = self.balances();
-
-        let is_in_whitelist = self.whilelist().contains(&caller);
-
-        if !balances.contains_key(&caller) {
-            return (BigUint::zero(), BigUint::zero(), 0, 0, is_in_whitelist);
-        }
-
-        let current_timestamp = self.blockchain().get_block_timestamp();
-
-        let mut claimable_release_count = 0u32;
-
-        let release_timestamps = self.release_timestamps();
-        for i in 1..release_timestamps.len() + 1 {
-            if current_timestamp >= release_timestamps.get(i) {
-                claimable_release_count += 1;
-            }
-        }
-
-        let (initial_locked_amount, claimed_release_count) = balances.get(&caller).unwrap();
-
-        claimable_release_count -= &claimed_release_count;
-
-        let locked_amount = BigUint::from(TOTAL_RELEASE_COUNT - claimed_release_count) * &initial_locked_amount * &BigUint::from(PERCENTAGE_PER_RELEASE) / &BigUint::from(INITIAL_LOCKED_PERCENTAGE);
-
-        return (initial_locked_amount, locked_amount, claimed_release_count, claimable_release_count, is_in_whitelist)
     }
 
     /// private functions ///
@@ -309,10 +216,6 @@ pub trait LandboardIcoSecond {
     #[storage_mapper("max_buy_limit")]
     fn max_buy_limit(&self) -> SingleValueMapper<BigUint>;
 
-    #[view(getReleaseTimestamps)]
-    #[storage_mapper("release_timestamps")]
-    fn release_timestamps(&self) -> VecMapper<u64>;
-
     // non-config
 
     #[view(getTotalBoughtAmountOfEgld)]
@@ -322,8 +225,4 @@ pub trait LandboardIcoSecond {
     #[view(getTotalBoughtAmountOfEsdt)]
     #[storage_mapper("total_bought_amount_of_esdt")]
     fn total_bought_amount_of_esdt(&self) -> SingleValueMapper<BigUint>;
-
-    // initial_locked_amount, claimed_release_count
-    #[storage_mapper("balances")]
-    fn balances(&self) -> MapMapper<ManagedAddress, (BigUint, u32)>;
 }

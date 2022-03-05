@@ -9,14 +9,11 @@ elrond_wasm_node::wasm_endpoints! {
     (
         addWhitelist
         buy
-        claim
         clearWhitelist
-        getAccountState
         getEndTime
         getGoal
         getMaxBuyLimit
         getMinBuyLimit
-        getReleaseTimestamps
         getStartTime
         getStatus
         getTokenId
@@ -25,7 +22,6 @@ elrond_wasm_node::wasm_endpoints! {
         getTotalBoughtAmountOfEsdt
         getWhitelist
         removeWhitelist
-        setReleaseTimestamps
         updateEndTime
         updateGoal
         updateMaxBuyLimit
