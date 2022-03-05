@@ -12,7 +12,7 @@ pub enum Status {
 }
 
 const EGLD_IN_WEI: u64 = 1_000_000_000_000_000_000u64;
-const ONE_DAY_IN_TIMESTAMPS: u64 = 24 * 3600;
+const ONE_DAY_IN_TIMESTAMPS: u64 = 24 * 3600 * 1000;
 
 /// Manage ICO of a new ESDT
 #[elrond_wasm::contract]

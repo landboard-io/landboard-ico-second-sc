@@ -13,7 +13,7 @@ TOKEN_PRICE=20000000000000          # 0.00002 EGLD
 MIN_BUY_LIMIT=200000000000000000    # 0.2 EGLD
 MAX_BUY_LIMIT=1000000000000000000   # 1 EGLD
 GOAL=500000000000000000000          # 500 EGLD
-START_TIME=0
+START_TIME=1646498778
 END_TIME=1654135000
 
 CALLER_ADDRESS_HEX="0x418c125e5a25d88f2ee0e4daaee26c1b4d878aeeb8a178ef23dcafb87b36d19d"
@@ -48,7 +48,7 @@ buy() {
     erdpy --verbose contract call ${ADDRESS} \
     --recall-nonce --pem=${WALLET} \
     --gas-limit=6000000 \
-    --value=1000000000000000000 \
+    --value=200000000000000000 \
     --function="buy" \
     --send --proxy=${PROXY} --chain=${CHAIN_ID}
 }
@@ -76,6 +76,15 @@ clearWhitelist() {
     --gas-limit=8000000 \
     --function="clearWhitelist" \
     --send --proxy=${PROXY} --chain=${CHAIN_ID}
+}
+
+updateStartTime() {
+    erdpy --verbose contract call ${ADDRESS} \
+    --recall-nonce --pem=${WALLET} \
+    --gas-limit=8000000 \
+    --function="updateStartTime" \
+    --send --proxy=${PROXY} --chain=${CHAIN_ID} \
+    --arguments 1646498778
 }
 
 # config
