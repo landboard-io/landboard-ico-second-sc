@@ -19,17 +19,22 @@ const ONE_DAY_IN_TIMESTAMPS: u64 = 24 * 3600;
 pub trait LandboardIcoSecond {
     // goal in ESDT, min_buy_limit, max_buy_limit are in EGLD
     #[init]
-    fn init(&self, token_id: TokenIdentifier, token_price: BigUint, start_time: u64, end_time: u64, goal: BigUint, min_buy_limit: BigUint, max_buy_limit: BigUint) {
+    fn init(&self, token_id: TokenIdentifier, locked_token_id: TokenIdentifier, token_price: BigUint, start_time: u64, end_time: u64, goal_in_egld: BigUint, min_buy_limit: BigUint, max_buy_limit: BigUint) {
         require!(
             token_id.is_valid_esdt_identifier(),
             "invalid token_id"
         );
-        
+        require!(
+            locked_token_id.is_valid_esdt_identifier(),
+            "Invalid locked token identifier"
+        );
+
         self.token_id().set(&token_id);
+        self.locked_token_id().set(&locked_token_id);
         self.token_price().set(&token_price);
         self.start_time().set(&start_time);
         self.end_time().set(&end_time);
-        self.goal().set(&goal);
+        self.goal_in_egld().set(&goal_in_egld);
         self.min_buy_limit().set(&min_buy_limit);
         self.max_buy_limit().set(&max_buy_limit);
     }
@@ -46,6 +51,16 @@ pub trait LandboardIcoSecond {
             "invalid token_id"
         );
         self.token_id().set(&token_id);
+    }
+
+    #[only_owner]
+    #[endpoint(updateLockedTokenId)]
+    fn update_locked_token_id(&self, locked_token_id: TokenIdentifier) {
+        require!(
+            locked_token_id.is_valid_esdt_identifier(),
+            "invalid locked_token_id"
+        );
+        self.locked_token_id().set(&locked_token_id);
     }
 
     #[only_owner]
@@ -85,9 +100,9 @@ pub trait LandboardIcoSecond {
     }
 
     #[only_owner]
-    #[endpoint(updateGoal)]
-    fn update_goal(&self, goal: BigUint) {
-        self.goal().set(&goal);
+    #[endpoint(updateGoalInEgld)]
+    fn update_goal_in_egld(&self, goal_in_egld: BigUint) {
+        self.goal_in_egld().set(&goal_in_egld);
     }
 
     #[only_owner]
@@ -140,22 +155,29 @@ pub trait LandboardIcoSecond {
         require!(payment_amount >= self.min_buy_limit().get(), "cannot buy less than min_buy_limit at once");
         require!(payment_amount <= self.max_buy_limit().get(), "cannot buy more than max_buy_limit at once");
 
-        let buy_amount = BigUint::from(EGLD_IN_WEI) * &payment_amount / &self.token_price().get();
+        require!(&payment_amount + &self.total_bought_amount_of_egld().get() <= self.goal_in_egld().get(), "cannot buy more than goal amount");
 
-        require!(&buy_amount + &self.total_bought_amount_of_egld().get() <= self.goal().get(), "cannot buy more than goal amount");
+        let token_price = self.token_price().get();
+        let token_id = self.token_id().get();
+        let locked_token_id = self.locked_token_id().get();
 
-        require!(buy_amount <= self.blockchain().get_sc_balance(&self.token_id().get(), 0), "not enough tokens in smart contract");
+        let token_amount = BigUint::from(EGLD_IN_WEI) * &payment_amount / &token_price * &BigUint::from(20u64) / &BigUint::from(100u64);
+        let locked_token_amount = BigUint::from(EGLD_IN_WEI) * &payment_amount / &token_price * &BigUint::from(80u64) / &BigUint::from(100u64);
+
+        require!(token_amount <= self.blockchain().get_sc_balance(&token_id, 0), "not enough LAND in smart contract");
+        require!(locked_token_amount <= self.blockchain().get_sc_balance(&locked_token_id, 0), "not enough LKLAND in smart contract");
 
         self.total_bought_amount_of_egld().update(|v| *v += &payment_amount);
-        self.total_bought_amount_of_esdt().update(|v| *v += &buy_amount);
+        self.total_bought_amount_of_esdt().update(|v| *v += &token_amount + &locked_token_amount);
 
-        self.send().direct(&caller, &self.token_id().get(), 0, &buy_amount, &[]);
+        self.send().direct(&caller, &token_id, 0, &token_amount, &[]);
+        self.send().direct(&caller, &locked_token_id, 0, &locked_token_amount, &[]);
     }
 
     /// view ///
 
     // return status of ico and left time from start_time or end_time
-    // return goal and total_bought_amount_of_esdt
+    // return goal_in_egld and total_bought_amount_of_esdt
     #[view(getStatus)]
     fn get_status(&self) -> (Status, u64, BigUint, BigUint) {
         let current_timestamp = self.blockchain().get_block_timestamp();
@@ -168,7 +190,7 @@ pub trait LandboardIcoSecond {
             (Status::Ended, 0u64)
         };
 
-        (status, target_time, self.goal().get(), self.total_bought_amount_of_esdt().get())
+        (status, target_time, self.goal_in_egld().get(), self.total_bought_amount_of_esdt().get())
     }
 
     /// private functions ///
@@ -188,6 +210,10 @@ pub trait LandboardIcoSecond {
     #[storage_mapper("token_id")]
     fn token_id(&self) -> SingleValueMapper<TokenIdentifier>;
 
+    #[view(getLockedTokenId)]
+    #[storage_mapper("locked_token_id")]
+    fn locked_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+
     #[view(getTokenPrice)]
     #[storage_mapper("token_price")]
     fn token_price(&self) -> SingleValueMapper<BigUint>;
@@ -204,9 +230,9 @@ pub trait LandboardIcoSecond {
     #[storage_mapper("end_time")]
     fn end_time(&self) -> SingleValueMapper<u64>;
 
-    #[view(getGoal)]
-    #[storage_mapper("goal")]
-    fn goal(&self) -> SingleValueMapper<BigUint>;
+    #[view(getGoalInEgld)]
+    #[storage_mapper("goal_in_egld")]
+    fn goal_in_egld(&self) -> SingleValueMapper<BigUint>;
 
     #[view(getMinBuyLimit)]
     #[storage_mapper("min_buy_limit")]

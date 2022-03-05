@@ -11,7 +11,8 @@ elrond_wasm_node::wasm_endpoints! {
         buy
         clearWhitelist
         getEndTime
-        getGoal
+        getGoalInEgld
+        getLockedTokenId
         getMaxBuyLimit
         getMinBuyLimit
         getStartTime
@@ -23,7 +24,8 @@ elrond_wasm_node::wasm_endpoints! {
         getWhitelist
         removeWhitelist
         updateEndTime
-        updateGoal
+        updateGoalInEgld
+        updateLockedTokenId
         updateMaxBuyLimit
         updateMinBuyLimit
         updateStartTime

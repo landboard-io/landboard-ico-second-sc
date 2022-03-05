@@ -6,12 +6,14 @@ CHAIN_ID="D"
 WALLET="./wallets/wallet.pem"
 
 TOKEN_ID="SVEN-4b35b0"
+LOCKED_TOKEN_NAME="SVEN-4b35b0"
 TOKEN_ID_HEX="0x$(echo -n ${TOKEN_ID} | xxd -p -u | tr -d '\n')"
+LOCKED_TOKEN_NAME_HEX="0x$(echo -n ${LOCKED_TOKEN_NAME} | xxd -p -u | tr -d '\n')"
 
 TOKEN_PRICE=20000000000000          # 0.00002 EGLD
 MIN_BUY_LIMIT=200000000000000000    # 0.2 EGLD
 MAX_BUY_LIMIT=1000000000000000000   # 1 EGLD
-GOAL=200000000000000000000000       # 200 000 EPAD
+GOAL=500000000000000000000          # 500 EGLD
 START_TIME=0
 END_TIME=1654135000
 
@@ -28,7 +30,7 @@ deploy() {
     --recall-nonce \
     --pem=${WALLET} \
     --gas-limit=50000000 \
-    --arguments ${TOKEN_ID_HEX} ${TOKEN_PRICE} ${START_TIME} ${END_TIME} ${GOAL} ${MIN_BUY_LIMIT} ${MAX_BUY_LIMIT} \
+    --arguments ${TOKEN_ID_HEX} ${TOKEN_PRICE} ${LOCKED_TOKEN_NAME_HEX} ${START_TIME} ${END_TIME} ${GOAL} ${MIN_BUY_LIMIT} ${MAX_BUY_LIMIT} \
     --send \
     --outfile="deploy-devnet.interaction.json" \
     --proxy=${PROXY} \
@@ -99,8 +101,8 @@ getEndTime() {
     erdpy --verbose contract query ${ADDRESS} --function="getEndTime" --proxy=${PROXY}
 }
 
-getGoal() {
-    erdpy --verbose contract query ${ADDRESS} --function="getGoal" --proxy=${PROXY}
+getGoalInEgld() {
+    erdpy --verbose contract query ${ADDRESS} --function="getGoalInEgld" --proxy=${PROXY}
 }
 
 getMinBuyLimit() {
